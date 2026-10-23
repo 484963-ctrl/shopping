@@ -165,7 +165,16 @@
         <button class="primary" id="shoot">📷 צילום</button>
         <button id="gallery">🖼️ מהגלריה</button>
       </div>
-      <div class="credit deskhint">במחשב אפשר גם לגרור תמונה לכאן, או להעתיק תמונה ולהדביק (Ctrl+V)</div>
+      <div class="row">
+        <button id="google">🌐 חיפוש בגוגל תמונות</button>
+        <button id="pasteBtn">📋 הדבקת תמונה</button>
+      </div>
+      <div class="credit" id="googleHint" hidden>בגוגל: לוחצים לחיצה ארוכה (או קליק ימני) על התמונה ← „העתקת תמונה” או „העתקת כתובת התמונה”, וחוזרים לכאן ל„הדבקת תמונה”.</div>
+      <form class="find" id="urlForm" hidden>
+        <input id="urlText" dir="ltr" inputmode="url" aria-label="כתובת תמונה" placeholder="מדביקים כאן את כתובת התמונה">
+        <button class="primary">שמירה</button>
+      </form>
+      <div class="credit deskhint">במחשב אפשר גם לגרור תמונה לכאן, או ללחוץ Ctrl+V אחרי העתקת תמונה</div>
       <form class="find" id="find">
         <input id="findText" enterkeyhint="search" aria-label="חיפוש מוצר" placeholder="שם המוצר והחברה, או מספר הברקוד">
         <button class="primary" aria-label="חיפוש">🔎</button>
@@ -542,6 +551,7 @@
     $('unpic').hidden = !(ph && ph.mine);
     $('shoot').textContent = ph && ph.mine ? '📷 צילום חדש' : '📷 צילום';
     $('findText').value = it.name;
+    $('googleHint').hidden = true; $('urlForm').hidden = true; $('urlText').value = '';
     $('findStatus').textContent = 'אפשר לחפש את המוצר המדויק (למשל: חלב תנובה 3%) ולבחור את התמונה שלו';
     $('results').innerHTML = '';
     $('photo').showModal();
@@ -682,8 +692,56 @@
   document.addEventListener('paste', e => {
     if (!$('photo').open) return;
     const f = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
-    if (f) { e.preventDefault(); usePhotoFile(f); }
+    if (f) { e.preventDefault(); return usePhotoFile(f); }
+    // הודבקה כתובת של תמונה (למשל „העתקת כתובת התמונה” בגוגל)
+    const t = (e.clipboardData?.getData('text') || '').trim();
+    if (e.target !== $('urlText') && isImageUrl(t)) { e.preventDefault(); usePhotoUrl(t); }
   });
+
+  // ----- תמונה מגוגל: פותחים חיפוש תמונות, מעתיקים תמונה וחוזרים להדביק -----
+  const isImageUrl = t => /^(https?:\/\/\S+|data:image\/[a-z+]+;base64,\S+)$/i.test(t);
+  $('google').onclick = () => {
+    $('googleHint').hidden = false;
+    window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent($('findText').value || photoItem.name), '_blank');
+  };
+  $('pasteBtn').onclick = async () => {
+    $('googleHint').hidden = false;
+    try {
+      // תמונה שהועתקה (בדפדפנים שמאפשרים לקרוא אותה)
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find(t => t.startsWith('image/'));
+        if (type) return usePhotoFile(await item.getType(type));
+      }
+    } catch {}
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (isImageUrl(t)) return usePhotoUrl(t);
+    } catch {}
+    // לא הצלחנו לקרוא מהלוח: מציגים שדה להדבקה ידנית
+    $('urlForm').hidden = false;
+    $('urlText').focus();
+    toast('לוחצים לחיצה ארוכה בשדה ← „הדבקה”');
+  };
+  $('urlForm').onsubmit = e => {
+    e.preventDefault();
+    const t = $('urlText').value.trim();
+    if (!isImageUrl(t)) return toast('זו לא נראית כתובת של תמונה');
+    usePhotoUrl(t);
+  };
+  // בודקים שהכתובת באמת נפתחת כתמונה, ושומרים (תמונה מוטמעת מוקטנת כמו צילום)
+  function usePhotoUrl(url) {
+    if (!photoItem) return;
+    const img = new Image();
+    img.onload = async () => {
+      if (url.startsWith('data:')) {
+        try { return usePhotoFile(await (await fetch(url)).blob()); } catch {}
+      }
+      myPhotos[photoItem.name] = url;
+      saveMyPhotos(); $('photo').close(); render(); toast('התמונה נשמרה');
+    };
+    img.onerror = () => toast('לא הצלחתי לפתוח את התמונה מהכתובת הזו. אפשר לנסות תמונה אחרת');
+    img.src = url;
+  }
   async function usePhotoFile(file) {
     if (!file || !photoItem) return;
     try {
