@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2fb36b">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <title>רשימת קניות</title>
+  <style>
+    @font-face{font-family:"Rubik";font-weight:400;font-display:swap;src:url(fonts/rubik-hebrew-400-normal.woff2) format("woff2");unicode-range:U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}
+    @font-face{font-family:"Rubik";font-weight:500;font-display:swap;src:url(fonts/rubik-hebrew-500-normal.woff2) format("woff2");unicode-range:U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}
+    @font-face{font-family:"Rubik";font-weight:700;font-display:swap;src:url(fonts/rubik-hebrew-700-normal.woff2) format("woff2");unicode-range:U+0590-05FF,U+200C-2010,U+20AA,U+25CC,U+FB1D-FB4F}
+    @font-face{font-family:"Rubik";font-weight:400;font-display:swap;src:url(fonts/rubik-latin-400-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2212}
+    @font-face{font-family:"Rubik";font-weight:700;font-display:swap;src:url(fonts/rubik-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+2000-206F,U+2212}
+
+    :root{
+      --bg:#f3f6f4; --surface:#fff; --line:#e3e9e5; --ink:#1d2b24; --muted:#6b7c73;
+      --accent:#2fb36b; --accent-ink:#1d8a4f; --accent-soft:#e6f6ec;
+      --shabbat:#7a5cff; --shabbat-soft:#efebff;
+      --done:#a3b0a9; --danger:#e5484d;
+      --shadow:0 1px 2px rgba(20,40,30,.06),0 4px 14px rgba(20,40,30,.06);
+    }
+    @media (prefers-color-scheme:dark){
+      :root:not([data-theme="light"]){
+        --bg:#111614; --surface:#1b221f; --line:#2b3531; --ink:#e8efeb; --muted:#93a39b;
+        --accent:#3cc77b; --accent-ink:#5ad593; --accent-soft:#1d3327;
+        --shabbat:#9f8aff; --shabbat-soft:#2a2545; --done:#5d6b64;
+        --shadow:0 1px 2px rgba(0,0,0,.3);
+      }
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Rubik",system-ui,sans-serif;font-size:17px}
+    body{padding-bottom:calc(90px + env(safe-area-inset-bottom))}
+    button,input,select{font:inherit;color:inherit}
+    button{cursor:pointer}
+
+    /* ראש המסך: לשוניות + שורת הוספה, נשאר למעלה בגלילה */
+    header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 10px}
+    .top{display:flex;gap:8px;align-items:stretch}
+    .syncbtn{flex:none;width:52px;border:0;border-radius:14px;background:var(--surface);box-shadow:var(--shadow);font-size:1.3em;position:relative}
+    .syncbtn i{position:absolute;top:8px;left:8px;width:9px;height:9px;border-radius:50%;background:var(--line)}
+    .syncbtn.on i{background:var(--accent)}
+    .syncbtn.err i{background:var(--danger)}
+    .code{font-size:1.7em;font-weight:700;letter-spacing:.08em;text-align:center;direction:ltr;background:var(--bg);border-radius:12px;padding:12px;margin-top:10px;user-select:all}
+    .sheet p{margin:8px 0 0;line-height:1.5;color:var(--ink)}
+    .codein{width:100%;direction:ltr;text-align:center;letter-spacing:.08em;text-transform:uppercase}
+    .tabs{flex:1;display:flex;gap:6px;background:var(--surface);border-radius:14px;padding:4px;box-shadow:var(--shadow)}
+    .tab{flex:1;border:0;background:none;border-radius:10px;padding:10px 4px;font-weight:700;color:var(--muted)}
+    .tab[aria-selected="true"]{background:var(--accent);color:#fff}
+    body.shabbat .tab[aria-selected="true"]{background:var(--shabbat)}
+    .tab .count{font-weight:400;opacity:.85;font-size:.85em}
+
+    .add{display:flex;gap:6px;margin-top:10px}
+    .add input{flex:1;min-width:0;border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:12px;outline:none}
+    .add input:focus{border-color:var(--accent)}
+    body.shabbat .add input:focus{border-color:var(--shabbat)}
+    .catpick{position:relative;width:52px;flex:none;border:2px solid var(--line);background:var(--surface);border-radius:12px;display:grid;place-items:center;font-size:1.4em}
+    .catpick select{position:absolute;inset:0;opacity:0;width:100%}
+    .add .go{flex:none;width:52px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:1.6em;font-weight:700}
+    body.shabbat .add .go{background:var(--shabbat)}
+
+    .progress{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:.85em;color:var(--muted)}
+    .bar{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+    .bar i{display:block;height:100%;background:var(--accent);transition:width .25s}
+    body.shabbat .bar i{background:var(--shabbat)}
+
+    main{padding:0 16px}
+    .group{margin-top:14px}
+    .group h2{margin:0 4px 6px;font-size:.85em;font-weight:700;color:var(--muted);display:flex;gap:6px;align-items:center}
+    .card{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+    .item{display:flex;align-items:center;gap:10px;min-height:60px;padding:0 6px 0 12px;border-top:1px solid var(--line)}
+    .item:first-child{border-top:0}
+    .item .tap{flex:1;display:flex;align-items:center;gap:12px;border:0;background:none;padding:12px 0;text-align:right;min-width:0}
+    .box{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;transition:.15s}
+    .item.done .box{background:var(--accent);border-color:var(--accent)}
+    body.shabbat .item.done .box{background:var(--shabbat);border-color:var(--shabbat)}
+    .box svg{width:14px;height:14px;opacity:0}
+    .item.done .box svg{opacity:1}
+    .thumb{flex:none;position:relative;width:44px;height:44px;border:0;padding:0;border-radius:10px;overflow:hidden;background:var(--accent-soft);display:grid;place-items:center;font-size:1.35em}
+    body.shabbat .thumb{background:var(--shabbat-soft)}
+    .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .item.done .thumb{opacity:.45;filter:grayscale(1)}
+    .name{overflow-wrap:anywhere}
+    .item.done .name{color:var(--done);text-decoration:line-through}
+    .qty{flex:none;border:0;background:var(--accent-soft);color:var(--accent-ink);border-radius:8px;padding:4px 9px;font-weight:700;font-size:.85em}
+    body.shabbat .qty{background:var(--shabbat-soft);color:var(--shabbat)}
+    .qty.one{background:none;color:var(--muted);font-size:1.1em;padding:4px 10px}
+    .del{flex:none;border:0;background:none;color:var(--muted);width:40px;height:40px;border-radius:10px;font-size:1.3em}
+    .del:active{background:var(--line)}
+
+    .empty{text-align:center;color:var(--muted);padding:48px 20px;line-height:1.6}
+    .empty b{display:block;font-size:2.4em;margin-bottom:6px}
+
+    /* פעולות למטה, ליד האגודל */
+    footer{position:fixed;inset:auto 0 0 0;z-index:5;display:flex;gap:8px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+    footer button{flex:1;border:0;border-radius:12px;padding:13px 6px;font-weight:700;background:var(--surface);box-shadow:var(--shadow)}
+    footer .primary{background:var(--accent);color:#fff}
+    body.shabbat footer .primary{background:var(--shabbat)}
+    footer button[hidden]{display:none}
+
+    .toast{position:fixed;left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:9;display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--bg);border-radius:12px;padding:12px 14px;transform:translateY(20px);opacity:0;pointer-events:none;transition:.2s}
+    .toast.show{transform:none;opacity:1;pointer-events:auto}
+    .toast span{flex:1}
+    .toast button{border:0;background:none;color:var(--accent);font-weight:700}
+    /* חלון תמונה: תמונה גדולה של המוצר, צילום או בחירה מהגלריה */
+    dialog{border:0;border-radius:18px;padding:0;width:min(92vw,400px);max-height:90vh;overflow:auto;background:var(--surface);color:var(--ink)}
+    dialog::backdrop{background:rgba(0,0,0,.5)}
+    .pic{aspect-ratio:16/10;background:var(--accent-soft);display:grid;place-items:center;font-size:5em;position:relative}
+    .pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .sheet{padding:14px}
+    .sheet h3{margin:0 0 2px;font-size:1.15em}
+    .credit{font-size:.75em;color:var(--muted);min-height:1em}
+    .credit a{color:inherit}
+    .sheet .row{display:flex;gap:8px;margin-top:12px}
+    .sheet button{flex:1;border:0;border-radius:12px;padding:12px 6px;font-weight:700;background:var(--bg)}
+    .sheet .primary{background:var(--accent);color:#fff}
+    .sheet button[hidden]{display:none}
+    .deskhint{margin-top:8px;display:none}
+    @media (hover:hover) and (pointer:fine){.deskhint{display:block}}
+    .find{display:flex;gap:6px;margin-top:12px}
+    .find input{flex:1;min-width:0;border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:10px;outline:none}
+    .find input:focus{border-color:var(--accent)}
+    .find button{flex:none;padding:10px 14px}
+    .status{font-size:.85em;color:var(--muted);margin-top:8px;min-height:1.2em}
+    .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+    .results button{display:flex;flex-direction:column;gap:4px;padding:4px;border:2px solid var(--line);border-radius:12px;background:var(--surface);font-weight:400;font-size:.72em;line-height:1.2;text-align:center;color:var(--ink)}
+    .results img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:8px}
+    .results span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    @media (min-width:600px){header,main{max-width:560px;margin:0 auto}footer{max-width:560px;margin:0 auto}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="top">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-list="general">🛒 קניות <span class="count" id="count-general"></span></button>
+      <button class="tab" role="tab" data-list="shabbat">🕯️ שבת <span class="count" id="count-shabbat"></span></button>
+    </div>
+    <button class="syncbtn" id="syncBtn" aria-label="סנכרון בין מכשירים">☁️<i></i></button>
+    </div>
+    <form class="add" id="add" autocomplete="off">
+      <input id="text" list="history" placeholder="מה צריך? (למשל: 2 חלב)" enterkeyhint="done" aria-label="פריט חדש">
+      <label class="catpick" title="קטגוריה"><span id="catIcon">🛒</span><select id="cat" aria-label="קטגוריה"></select></label>
+      <button class="go" aria-label="הוספה">+</button>
+    </form>
+    <datalist id="history"></datalist>
+    <div class="progress" id="progress"><div class="bar"><i id="barFill"></i></div><span id="progressText"></span></div>
+  </header>
+
+  <main id="list"></main>
+
+  <footer>
+    <button id="share">שיתוף</button>
+    <button id="clear">ניקוי מה שנקנה</button>
+    <button id="reset" class="primary" hidden>שבת חדשה</button>
+  </footer>
+
+  <dialog id="photo">
+    <div class="pic" id="picBig"></div>
+    <div class="sheet">
+      <h3 id="picName"></h3>
+      <div class="credit" id="picCredit"></div>
+      <div class="row">
+        <button class="primary" id="shoot">📷 צילום</button>
+        <button id="gallery">🖼️ מהגלריה</button>
+      </div>
+      <div class="credit deskhint">במחשב אפשר גם לגרור תמונה לכאן, או להעתיק תמונה ולהדביק (Ctrl+V)</div>
+      <form class="find" id="find">
+        <input id="findText" enterkeyhint="search" aria-label="חיפוש מוצר" placeholder="שם המוצר והחברה, או מספר הברקוד">
+        <button class="primary" aria-label="חיפוש">🔎</button>
+      </form>
+      <div class="row"><button id="scan">▥ סריקת ברקוד</button></div>
+      <div class="status" id="findStatus"></div>
+      <div class="results" id="results"></div>
+      <div class="row">
+        <button id="unpic" hidden>הסרת התמונה שלי</button>
+        <button id="picClose">סגירה</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="syncDlg">
+    <div class="sheet">
+      <h3>☁️ אותה רשימה בטלפון ובמחשב</h3>
+      <div id="syncOff">
+        <p>מחברים את המכשירים בקוד אחד, וכל שינוי (פריטים, סימונים ותמונות) מופיע בכולם.</p>
+        <div class="row"><button class="primary" id="syncNew">יצירת קוד חדש</button></div>
+        <p>כבר יש לכם קוד ממכשיר אחר?</p>
+        <form class="find" id="syncJoin">
+          <input class="codein" id="syncCode" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" aria-label="קוד סנכרון">
+          <button class="primary">חיבור</button>
+        </form>
+      </div>
+      <div id="syncOn" hidden>
+        <p>הקוד של הרשימה. במכשיר השני פותחים את רשימת הקניות, לוחצים על ☁️ ומקלידים אותו:</p>
+        <div class="code" id="syncShow"></div>
+        <div class="row"><button id="syncNow">סנכרון עכשיו</button><button id="syncOut">ניתוק המכשיר הזה</button></div>
+      </div>
+      <div class="status" id="syncStatus"></div>
+      <div class="row"><button id="syncClose">סגירה</button></div>
+    </div>
+  </dialog>
+  <input type="file" id="fileShoot" accept="image/*" capture="environment" hidden>
+  <input type="file" id="fileGallery" accept="image/*" hidden>
+  <input type="file" id="fileBarcode" accept="image/*" capture="environment" hidden>
+
+  <div class="toast" id="toast" role="status"><span id="toastText"></span><button id="undo">ביטול</button></div>
+
+  <script src="config.js"></script>
+  <script>
+  const CATS = [
+    ['veg','🥬','ירקות ופירות',['עגבני','מלפפ','בצל','שום','תפוח','תפו"א','גזר','חסה','פלפל','לימון','בננ','אבוקדו','תפוז','ענב','אבטיח','מלון','קישוא','חציל','כרוב','פטרוזיליה','כוסברה','שמיר','נענע','פירות','ירקות','בטטה','תות','אגס','קלמנטינ','פטריות','סלק']],
+    ['dairy','🥛','חלב וביצים',['חלב','גבינ','יוגורט','לבן','שמנת','חמאה','ביצ','קוטג','מעדנ','צהובה','בולגרית','לאבנה','פודינג']],
+    ['bread','🍞','לחם ומאפים',['לחם','חל','פיתות','פיתה','לחמני','בגט','טורטי','קרקר','עוגה','עוגות','עוגיות','בורקס','רוגלך','פריכיות']],
+    ['meat','🍗','בשר ודגים',['עוף','בשר','שניצל','חזה','כרעיים','פרגי','טחון','נקניק','דג','סלמון','טונה','הודו','קבב','המבורגר','כבד','שוקיים']],
+    ['pantry','🥫','מזווה',['אורז','פסטה','קמח','סוכר','מלח','שמן','רוטב','קטשופ','מיונז','חומוס','טחינה','שימור','תירס','אפונה','קפה','תה','דבש','ריבה','שוקולד למריחה','קורנפלקס','דגני','פתיתים','קוסקוס','עדשים','שעועית','תבלינ','פפריקה','כמון','חומץ','ממרח','סלט','מטבוחה','חמוצים','זיתים','אבקת']],
+    ['frozen','🧊','קפואים',['קפוא','גלידה','ארטיק','פיצה','בצק','שניצלונ','אצבעות']],
+    ['drinks','🥤','שתייה',['מים','סודה','קולה','מיץ','בירה','יין','תירוש','שתיי','פטל','משקה','ספרייט']],
+    ['snacks','🍫','חטיפים ומתוקים',['במבה','ביסלי','חטיף','שוקולד','סוכרי','צ\'יפס','דובונים','וופל','פופקורן','גרעינים','בוטנים','אגוזים','שקדים']],
+    ['clean','🧽','ניקיון וחד״פ',['סבון כלים','אקונומיקה','נוזל','מטלי','ספוג','שקיות','נייר כסף','נייר אפייה','ניילון','מפיות','צלחות','כוסות','סכו"ם','חד פעמי','אבקת כביסה','מרכך','סנו','מגבונ','נייר טואלט','נייר סופג','מטהר','נרות']],
+    ['care','🧴','טואלטיקה ופארם',['שמפו','סבון','משחת שיניים','מברשת','דאודורנט','קרם','תחבושות','טמפונ','גילוח','צמר גפן','אקמול','פלסטר','ויטמינ']],
+    ['baby','👶','תינוקות',['חיתול','מטרנה','סימילאק','דייסה','מוצץ','בקבוק']],
+    ['other','🛒','שונות',[]],
+  ];
+  const CAT = Object.fromEntries(CATS.map(([id, icon, label]) => [id, {icon, label}]));
+
+  // תמונות אמיתיות למוצרים נפוצים (Unsplash). לפי הסדר: הראשון שמתאים לשם הפריט.
+  // פריט בלי תמונה מתאימה מקבל את סמל הקטגוריה, ואפשר לצלם לו תמונה משלכם.
+  const MG = 'Mockup Graphics';
+  const PHOTOS = [
+    [['תפוח אדמה','תפוחי אדמה','תפו"א'], 'photo-1587334274084-2def9f57bd27', MG],
+    [['עגבני'], 'photo-1571680322279-a226e6a4cc2a', "Ed O'Neil"],
+    [['מלפפ'], 'photo-1587411768638-ec71f8e33b78', MG],
+    [['פלפל חריף','צ\'ילי'], 'photo-1583119022894-919a68a3d0e3', MG],
+    [['פלפל'], 'photo-1579113800032-c38bd7635818', 'Marisol Benitez'],
+    [['בצל'], 'photo-1587049633312-d628ae50a8ae', MG],
+    [['שום'], 'photo-1587049332298-1c42e83937a7', MG, ['שומשום','שומן']],
+    [['גזר'], 'photo-1763712505260-def761cd0c34', 'Jenny Johannessen'],
+    [['לימון'], 'flagged/photo-1587302164675-820fe61bbd55', MG],
+    [['בננ'], 'photo-1587132137056-bfbf0166836e', MG],
+    [['תפוח','תפוחים'], 'photo-1568579029378-d2cc4074f57c', 'Richard Pennystan'],
+    [['תפוז','קלמנטינ','מנדרינ'], 'photo-1587735243615-c03f25aaff15', MG],
+    [['מנגו'], 'photo-1587131808575-655697d61a4e', MG],
+    [['רימון'], 'photo-1615485925600-97237c4fc1ec', MG],
+    [['אגס'], 'photo-1615484477778-ca3b77940c25', MG],
+    [['ענב'], 'photo-1615485925763-86786288908a', MG],
+    [['תות'], 'photo-1601004890684-d8cbf643f5f2', 'Allec Gomes'],
+    [['אבוקדו'], 'photo-1519162808019-7de1683fa2ad', 'Thought Catalog'],
+    [['חציל'], 'photo-1615484477201-9f4953340fab', MG],
+    [['שוקו'], 'photo-1542990253-0d0f5be5f0ed', 'Maddi Bazzocco', ['שוקולד']],
+    [['חלב'], 'photo-1550583724-b2692b85b150', 'Eiliv Aceron', ['חלבה']],
+    [['ביצ'], 'photo-1587486913049-53fc88980cfc', MG],
+    [['גבינ'], 'photo-1683314573422-649a3c6ad784', 'David Foodphototasty'],
+    [['חלה','חלות'], 'photo-1620416328855-f56e4e98637b', 'Megan Allen'],
+    [['פית'], 'photo-1710444448930-85ce405eb20f', 'Stephanie Sarlos'],
+    [['לחם'], 'photo-1534620808146-d33bb39128b2', 'Louise Lyshøj'],
+    [['עוגה','עוגות'], 'photo-1587333981056-844f89654004', MG],
+    [['עוף','חזה','שניצל','כרעיים','פרגי','שוקיים'], 'photo-1587593810167-a84920ea0781', 'JK Sloan'],
+    [['דגים','פילה','סלמון','אמנון','לברק','דניס'], 'photo-1633244092661-4519a1ffc67e', 'Food PhotoGraphy Mumbai'],
+    [['אורז'], 'photo-1586201375761-83865001e31c', 'Pierre Bamin'],
+    [['יין'], 'photo-1610631787813-9eeb1a2386cc', 'Duminda Perera'],
+    [['צ\'יפס'], 'photo-1615485290836-4ebcebf44aaf', MG],
+  ];
+  const photoUrl = (path, size) => `https://images.unsplash.com/${path}?w=${size}&h=${size}&fit=crop&crop=entropy&auto=format&q=60`;
+  const builtinPhoto = name => PHOTOS.find(([words, , , not = []]) => words.some(w => name.includes(w)) && !not.some(w => name.includes(w)));
+
+  // תמונות שצילמתם בעצמכם: לפי שם הפריט, כך שהן חוזרות בכל פעם שמוסיפים אותו
+  const PHOTO_KEY = 'shopping-photos-v1';
+  let myPhotos = {};
+  try { myPhotos = JSON.parse(localStorage.getItem(PHOTO_KEY)) || {}; } catch {}
+  // שעת השינוי של כל תמונה (גם הסרה), למיזוג בין מכשירים
+  const PHOTO_TIME_KEY = 'shopping-photo-times-v1';
+  let photoTimes = {};
+  try { photoTimes = JSON.parse(localStorage.getItem(PHOTO_TIME_KEY)) || {}; } catch {}
+  let savedPhotos = {...myPhotos};
+  function saveMyPhotos() {
+    const now = Date.now();
+    for (const n of new Set([...Object.keys(myPhotos), ...Object.keys(savedPhotos)]))
+      if (myPhotos[n] !== savedPhotos[n]) photoTimes[n] = now;
+    try {
+      localStorage.setItem(PHOTO_KEY, JSON.stringify(myPhotos));
+      localStorage.setItem(PHOTO_TIME_KEY, JSON.stringify(photoTimes));
+    } catch { return false; }
+    savedPhotos = {...myPhotos};
+    scheduleSync();
+    return true;
+  }
+
+  // תמונות שנמצאו לבד בחיפוש (לפי שם הפריט). {src, t}: src ריק = לא נמצא, מנסים שוב אחרי יום
+  const AUTO_KEY = 'shopping-auto-photos-v1';
+  let autoPhotos = {};
+  try { autoPhotos = JSON.parse(localStorage.getItem(AUTO_KEY)) || {}; } catch {}
+
+  // ירקות ופירות, ומוצר כללי במילה אחת („חלב”): התמונה המובנית.
+  // מוצר עם פרטים („חלב תנובה 3%”): מחפשים את התמונה של המוצר עצמו.
+  const keepBuiltin = it => builtinPhoto(it.name) && (it.cat === 'veg' || !it.name.includes(' '));
+
+  function photoFor(it, size) {
+    if (myPhotos[it.name]) return {src: myPhotos[it.name], mine: true};
+    const b = builtinPhoto(it.name);
+    if (b && (keepBuiltin(it) || !autoPhotos[it.name]?.src)) return {src: photoUrl(b[1], size), credit: b[2]};
+    if (autoPhotos[it.name]?.src) return {src: autoPhotos[it.name].src, auto: true};
+    return null;
+  }
+
+  // מחפשים ברקע תמונה של המוצר המסוים לכל פריט שעוד אין לו, אחד אחרי השני
+  let autoBusy = false;
+  async function fillAutoPhotos() {
+    if (autoBusy || navigator.onLine === false) return;
+    const other = state.current === 'shabbat' ? 'general' : 'shabbat';
+    const all = [...items(), ...state.lists[other]];   // קודם הרשימה שעל המסך
+    const need = all.find(it => !myPhotos[it.name] && !keepBuiltin(it)
+      && !(autoPhotos[it.name] && (autoPhotos[it.name].src || Date.now() - autoPhotos[it.name].t < 864e5)));
+    if (!need) return;
+    autoBusy = true;
+    let src = '';
+    for (const find of [findProducts, findWiki]) {
+      try { src = (await find(need.name))[0]?.src || ''; } catch {}
+      if (src) break;
+    }
+    autoPhotos[need.name] = {src, t: Date.now()};
+    try { localStorage.setItem(AUTO_KEY, JSON.stringify(autoPhotos)); } catch {}
+    if (src) render();
+    // מרווח קטן בין חיפושים, כדי לא להעמיס על המאגר
+    setTimeout(() => { autoBusy = false; fillAutoPhotos(); }, 1200);
+  }
+
+  // רשימת שבת קבועה: פריטים שחוזרים כל שבוע ומתאפסים ב„שבת חדשה”
+  const SHABBAT_DEFAULT = [
+    ['חלות',2,'bread'],['יין לקידוש',1,'drinks'],['נרות שבת',1,'clean'],['עוף',1,'meat'],['דגים',1,'meat'],
+    ['חומוס',1,'pantry'],['טחינה',1,'pantry'],['מטבוחה',1,'pantry'],['עגבניות',1,'veg'],['מלפפונים',1,'veg'],
+    ['תפוחי אדמה',1,'veg'],['בצל',1,'veg'],['פירות',1,'veg'],['אורז',1,'pantry'],['עוגה',1,'bread'],
+    ['שתייה קלה',2,'drinks'],['מפיות',1,'clean'],['נייר כסף',1,'clean'],
+  ];
+
+  const KEY = 'shopping-list-v1';
+  const $ = id => document.getElementById(id);
+  // מזהה שמתחיל בזמן היצירה: מיון לפי מזהה = סדר ההוספה, וזהה בכל המכשירים
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  let state, lastUndo = null, toastTimer;
+
+  function load() {
+    try { state = JSON.parse(localStorage.getItem(KEY)); } catch { state = null; }
+    if (!state || !state.lists) {
+      state = {
+        current: 'general',
+        lists: {
+          general: [],
+          shabbat: SHABBAT_DEFAULT.map(([name, qty, cat], i) => ({id: '0sh' + i, name, qty, cat, done: false})),   // מזהה קבוע: זהה בכל מכשיר חדש
+        },
+        history: {},
+      };
+    }
+    state.gone ||= {};
+    rememberSaved();
+  }
+
+  // לכל פריט שהשתנה נרשמת שעת השינוי (u), ולכל פריט שנמחק – רישום ב-gone.
+  // כך אפשר למזג שינויים מכמה מכשירים בלי לאבד אף אחד.
+  let saved = new Map();
+  const itemKey = it => JSON.stringify([it.name, it.qty, it.cat, it.done]);
+  function rememberSaved() {
+    saved = new Map(Object.values(state.lists).flat().map(it => [it.id, itemKey(it)]));
+  }
+  function save() {
+    const now = Date.now(), present = new Set();
+    for (const it of Object.values(state.lists).flat()) {
+      present.add(it.id);
+      if (saved.get(it.id) !== itemKey(it)) it.u = now;
+      if (saved.get(it.id) === undefined) delete state.gone[it.id];   // פריט שחזר (ביטול מחיקה)
+    }
+    for (const id of saved.keys()) if (!present.has(id)) state.gone[id] = now;
+    rememberSaved();
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+    scheduleSync();
+  }
+
+  function guessCat(name) {
+    if (state.history[name]) return state.history[name];
+    for (const [id, , , words] of CATS) if (words.some(w => name.includes(w))) return id;
+    return 'other';
+  }
+
+  // „2 חלב”, „חלב 2”, „חלב x2” → שם וכמות
+  function parse(text) {
+    const t = text.trim().replace(/\s+/g, ' ');
+    let m = t.match(/^(\d+)\s*[x×]?\s+(.+)$/) || t.match(/^(.+?)\s+[x×]?\s*(\d+)$/);
+    if (!m) return {name: t, qty: 1};
+    const [a, b] = /^\d/.test(t) ? [m[2], m[1]] : [m[1], m[2]];
+    return {name: a.trim(), qty: Math.min(99, Math.max(1, +b))};
+  }
+
+  const items = () => state.lists[state.current];
+
+  function render() {
+    document.body.classList.toggle('shabbat', state.current === 'shabbat');
+    document.querySelector('meta[name=theme-color]').content = state.current === 'shabbat' ? '#7a5cff' : '#2fb36b';
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.list === state.current));
+    for (const k of ['general', 'shabbat']) {
+      const left = state.lists[k].filter(i => !i.done).length;
+      $('count-' + k).textContent = left ? `(${left})` : '';
+    }
+
+    const list = items(), done = list.filter(i => i.done).length;
+    $('progress').style.visibility = list.length ? 'visible' : 'hidden';
+    $('barFill').style.width = list.length ? (done / list.length * 100) + '%' : '0';
+    $('progressText').textContent = `${done} מתוך ${list.length}`;
+    $('reset').hidden = state.current !== 'shabbat';
+    $('clear').hidden = state.current === 'shabbat';
+
+    const main = $('list');
+    if (!list.length) {
+      main.innerHTML = state.current === 'shabbat'
+        ? '<div class="empty"><b>🕯️</b>רשימת השבת ריקה.<br>מוסיפים פריטים פעם אחת, וכל שבוע לוחצים „שבת חדשה”.</div>'
+        : '<div class="empty"><b>🛒</b>הרשימה ריקה.<br>כותבים למעלה מה צריך ולוחצים +</div>';
+      return;
+    }
+    // קבוצה לכל קטגוריה לפי סדר המעברים בסופר; פריטים שנקנו יורדים לסוף הקבוצה
+    main.innerHTML = '';
+    for (const [id, icon, label] of CATS) {
+      const g = list.filter(i => i.cat === id).sort((a, b) => a.done - b.done);
+      if (!g.length) continue;
+      const sec = document.createElement('section');
+      sec.className = 'group';
+      sec.innerHTML = `<h2>${icon} ${label}</h2><div class="card"></div>`;
+      const card = sec.lastChild;
+      for (const it of g) {
+        const row = document.createElement('div');
+        row.className = 'item' + (it.done ? ' done' : '');
+        const ph = photoFor(it, 96);
+        row.innerHTML = `<button class="thumb" data-act="photo" aria-label="תמונה">${CAT[it.cat].icon}</button><button class="tap" data-act="toggle"><span class="box"><svg viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="name"></span></button>`
+          + (it.qty > 1 ? `<button class="qty" data-act="qty" aria-label="כמות">×${it.qty}</button>`
+             : it.done ? '' : `<button class="qty one" data-act="qty" aria-label="להוסיף כמות">+</button>`)
+          + `<button class="del" data-act="del" aria-label="מחיקה">×</button>`;
+        row.querySelector('.name').textContent = it.name;
+        if (ph) {
+          const img = new Image();
+          img.alt = ''; img.loading = 'lazy'; img.src = ph.src;
+          img.onerror = () => img.remove();   // בלי אינטרנט: נשאר סמל הקטגוריה
+          row.querySelector('.thumb').append(img);
+        }
+        row.dataset.id = it.id;
+        card.append(row);
+      }
+      main.append(sec);
+    }
+    fillAutoPhotos();
+  }
+
+  function updateCatPicker() {
+    const name = parse($('text').value).name;
+    if (!$('cat').dataset.manual) $('cat').value = name ? guessCat(name) : 'other';
+    $('catIcon').textContent = CAT[$('cat').value].icon;
+  }
+
+  function add(e) {
+    e.preventDefault();
+    const {name, qty} = parse($('text').value);
+    if (!name) return;
+    const cat = $('cat').value, list = items();
+    const same = list.find(i => i.name === name);
+    if (same) { same.qty = same.done ? qty : same.qty + qty; same.done = false; same.cat = cat; }
+    else list.push({id: uid(), name, qty, cat, done: false});
+    state.history[name] = cat;
+    save(); fillHistory();
+    $('text').value = ''; delete $('cat').dataset.manual; updateCatPicker();
+    render();
+    $('text').focus();
+  }
+
+  function toast(text, undo) {
+    $('toastText').textContent = text;
+    lastUndo = undo;
+    $('undo').hidden = !undo;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 4000);
+  }
+  function snapshot() {
+    const copy = JSON.stringify(state.lists[state.current]), which = state.current;
+    return () => { state.lists[which] = JSON.parse(copy); save(); render(); };
+  }
+
+  $('list').addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const list = items(), idx = list.findIndex(i => i.id === btn.closest('.item').dataset.id), it = list[idx];
+    if (btn.dataset.act === 'photo') return openPhoto(it);
+    if (btn.dataset.act === 'toggle') { it.done = !it.done; if (navigator.vibrate) navigator.vibrate(10); }
+    if (btn.dataset.act === 'qty') it.qty = it.qty >= 20 ? 1 : it.qty + 1;
+    if (btn.dataset.act === 'del') { const u = snapshot(); list.splice(idx, 1); toast(`„${it.name}” נמחק`, u); }
+    save(); render();
+  });
+
+  document.querySelector('.tabs').addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    state.current = t.dataset.list; save(); render();
+  });
+
+  $('clear').onclick = () => {
+    const list = items(), n = list.filter(i => i.done).length;
+    if (!n) return toast('עוד לא סימנת שום דבר כנקנה');
+    const u = snapshot();
+    state.lists[state.current] = list.filter(i => !i.done);
+    save(); render(); toast(`${n} פריטים הוסרו`, u);
+  };
+
+  $('reset').onclick = () => {
+    const u = snapshot();
+    items().forEach(i => i.done = false);
+    save(); render(); toast('רשימת השבת מוכנה לקנייה חדשה', u);
+  };
+
+  $('share').onclick = async () => {
+    const list = items().filter(i => !i.done);
+    if (!list.length) return toast('אין מה לשתף, הכול נקנה');
+    const title = state.current === 'shabbat' ? '🕯️ קניות לשבת' : '🛒 רשימת קניות';
+    let text = title + '\n';
+    for (const [id, icon, label] of CATS) {
+      const g = list.filter(i => i.cat === id);
+      if (g.length) text += `\n${icon} ${label}\n` + g.map(i => `• ${i.name}${i.qty > 1 ? ' ×' + i.qty : ''}`).join('\n') + '\n';
+    }
+    if (navigator.share) { try { await navigator.share({text}); } catch {} }
+    else location.href = 'https://wa.me/?text=' + encodeURIComponent(text);
+  };
+
+  $('undo').onclick = () => { if (lastUndo) lastUndo(); lastUndo = null; $('toast').classList.remove('show'); };
+
+  let photoItem = null;
+  function openPhoto(it) {
+    photoItem = it;
+    const ph = photoFor(it, 800), big = $('picBig');
+    big.textContent = CAT[it.cat].icon;
+    if (ph) { const img = new Image(); img.alt = it.name; img.src = ph.src; img.onerror = () => img.remove(); big.append(img); }
+    $('picName').textContent = it.name;
+    $('picCredit').innerHTML = ph && ph.credit
+      ? `צילום: ${ph.credit} / <a href="https://unsplash.com/?utm_source=shopping_list&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>` : '';
+    $('unpic').hidden = !(ph && ph.mine);
+    $('shoot').textContent = ph && ph.mine ? '📷 צילום חדש' : '📷 צילום';
+    $('findText').value = it.name;
+    $('findStatus').textContent = 'אפשר לחפש את המוצר המדויק (למשל: חלב תנובה 3%) ולבחור את התמונה שלו';
+    $('results').innerHTML = '';
+    $('photo').showModal();
+  }
+
+  // ----- חיפוש תמונה של מוצר מסוים -----
+  // מוצרים ארוזים: Open Food Facts (מאגר פתוח עם תמונות האריזה, גם לפי ברקוד).
+  // ירקות, פירות ושאר מוצרים כלליים: התמונה של הערך בוויקיפדיה העברית.
+  const OFF = 'https://world.openfoodfacts.org';
+  const offItem = p => p.image_front_small_url && {src: p.image_front_small_url, label: [p.product_name_he || p.product_name, p.brands].filter(Boolean).join(' · ')};
+  async function getJson(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+  async function findByBarcode(code) {
+    const d = await getJson(`${OFF}/api/v2/product/${code}.json?fields=product_name,product_name_he,brands,image_front_small_url`);
+    return d.product ? [offItem(d.product)].filter(Boolean) : [];
+  }
+  async function findProducts(q) {
+    const d = await getJson(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&json=1&page_size=12&fields=product_name,product_name_he,brands,image_front_small_url`);
+    return (d.products || []).map(offItem).filter(Boolean);
+  }
+  async function findWiki(q) {
+    const d = await getJson(`https://he.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=6&gsrsearch=${encodeURIComponent(q)}&prop=pageimages&piprop=thumbnail&pithumbsize=300`);
+    return Object.values(d.query?.pages || {}).sort((a, b) => a.index - b.index)
+      .filter(p => p.thumbnail).map(p => ({src: p.thumbnail.source, label: p.title}));
+  }
+
+  let searchId = 0;
+  async function search(q) {
+    q = q.trim();
+    if (!q) return;
+    const id = ++searchId, digits = q.replace(/\s/g, '');
+    $('results').innerHTML = '';
+    $('findStatus').textContent = 'מחפש...';
+    const tasks = /^\d{8,14}$/.test(digits) ? [findByBarcode(digits)] : [findProducts(q), findWiki(q)];
+    const found = (await Promise.allSettled(tasks)).flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    if (id !== searchId) return;
+    if (!found.length) {
+      $('findStatus').textContent = navigator.onLine === false ? 'אין חיבור לאינטרנט' : 'לא נמצאו תמונות. אפשר לנסות שם אחר, לסרוק ברקוד או לצלם';
+      return;
+    }
+    $('findStatus').textContent = 'בוחרים את התמונה המתאימה:';
+    for (const f of found.slice(0, 15)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.innerHTML = '<img alt="" loading="lazy"><span></span>';
+      b.querySelector('img').src = f.src;
+      b.querySelector('img').onerror = () => b.remove();
+      b.querySelector('span').textContent = f.label;
+      b.onclick = () => {
+        myPhotos[photoItem.name] = f.src;
+        saveMyPhotos(); $('photo').close(); render(); toast('התמונה נשמרה');
+      };
+      $('results').append(b);
+    }
+  }
+  $('find').onsubmit = e => { e.preventDefault(); $('findText').blur(); search($('findText').value); };
+
+  // סריקת ברקוד: מצלמים את הברקוד והטלפון קורא את המספר (בטלפונים שתומכים בזה)
+  $('scan').onclick = () => {
+    if (!('BarcodeDetector' in window)) {
+      $('findStatus').textContent = 'הטלפון לא קורא ברקוד מתמונה. אפשר להקליד את המספר שמתחת לברקוד ולחפש';
+      $('findText').value = ''; $('findText').focus();
+      return;
+    }
+    $('fileBarcode').click();
+  };
+  $('fileBarcode').onchange = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const codes = await new BarcodeDetector().detect(await createImageBitmap(file));
+      if (!codes.length) return void ($('findStatus').textContent = 'לא זיהיתי ברקוד. כדאי לצלם מקרוב ובאור טוב');
+      $('findText').value = codes[0].rawValue;
+      search(codes[0].rawValue);
+    } catch { $('findStatus').textContent = 'לא הצלחתי לקרוא את הברקוד'; }
+  };
+  $('picClose').onclick = () => $('photo').close();
+  $('photo').addEventListener('click', e => { if (e.target === $('photo')) $('photo').close(); });
+  $('shoot').onclick = () => $('fileShoot').click();
+  $('gallery').onclick = () => $('fileGallery').click();
+  $('unpic').onclick = () => { delete myPhotos[photoItem.name]; saveMyPhotos(); $('photo').close(); render(); };
+
+  // מקטינים לריבוע של 240 פיקסלים, כדי שהתמונה תישמר בטלפון בלי לתפוס מקום
+  function shrink(file) {
+    return new Promise((ok, fail) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const S = 240, c = document.createElement('canvas'), m = Math.min(img.width, img.height);
+        c.width = c.height = S;
+        c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = fail;
+      img.src = url;
+    });
+  }
+  for (const id of ['fileShoot', 'fileGallery']) $(id).onchange = e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    usePhotoFile(file);
+  };
+  // במחשב: אפשר גם לגרור תמונה לחלון, או להעתיק תמונה ולהדביק (Ctrl+V)
+  $('photo').addEventListener('dragover', e => e.preventDefault());
+  $('photo').addEventListener('drop', e => { e.preventDefault(); usePhotoFile([...e.dataTransfer.files].find(f => f.type.startsWith('image/'))); });
+  document.addEventListener('paste', e => {
+    if (!$('photo').open) return;
+    const f = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
+    if (f) { e.preventDefault(); usePhotoFile(f); }
+  });
+  async function usePhotoFile(file) {
+    if (!file || !photoItem) return;
+    try {
+      myPhotos[photoItem.name] = await shrink(file);
+      if (!saveMyPhotos()) { delete myPhotos[photoItem.name]; return toast('אין מספיק מקום לשמור עוד תמונות'); }
+      $('photo').close(); render(); toast('התמונה נשמרה');
+    } catch { toast('לא הצלחתי לפתוח את התמונה'); }
+  }
+
+  // ----- סנכרון בין מכשירים (Supabase, לפי קוד) -----
+  const SYNC_KEY = 'shopping-sync-code';
+  let syncCode = '';
+  try { syncCode = localStorage.getItem(SYNC_KEY) || ''; } catch {}
+  const CODE_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), b => CODE_ABC[b % CODE_ABC.length]).join('');
+  const cleanCode = t => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const showCode = c => c.match(/.{1,4}/g).join('-');
+
+  async function rpc(fn, args) {
+    const c = window.FAMILY_MISSIONS_CONFIG;
+    if (!c) throw new Error('no config');
+    const r = await fetch(`${c.url}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {apikey: c.publishableKey, 'Content-Type': 'application/json'},
+      body: JSON.stringify(args),
+    });
+    if (!r.ok) throw new Error(r.status);
+    const t = await r.text();
+    return t ? JSON.parse(t) : null;
+  }
+
+  const localDoc = () => ({v: 1, lists: state.lists, gone: state.gone, history: state.history, photos: myPhotos, photoTimes});
+
+  // מיזוג: לכל פריט ולכל תמונה מנצח השינוי האחרון. פריט שנמחק אחרי השינוי האחרון שלו – לא חוזר.
+  function mergeDocs(a, b) {
+    if (!b || !b.lists) return a;
+    const gone = {...a.gone};
+    for (const [id, t] of Object.entries(b.gone || {})) gone[id] = Math.max(gone[id] || 0, t);
+    const monthAgo = Date.now() - 30 * 864e5;
+    for (const id in gone) if (gone[id] < monthAgo) delete gone[id];
+    const lists = {};
+    for (const L of ['general', 'shabbat']) {
+      const map = new Map();
+      for (const it of [...(a.lists[L] || []), ...(b.lists[L] || [])]) {
+        const cur = map.get(it.id);
+        if (!cur || (it.u || 0) > (cur.u || 0)) map.set(it.id, it);
+      }
+      // אותו פריט שנוסף בשני מכשירים: נשאר אחד (השינוי האחרון), השני נמחק בכולם
+      const byName = new Map();
+      for (const it of map.values()) {
+        if (gone[it.id] >= (it.u || 0)) continue;
+        const other = byName.get(it.name);
+        if (!other) { byName.set(it.name, it); continue; }
+        const [keep, drop] = (it.u || 0) > (other.u || 0) || ((it.u || 0) === (other.u || 0) && it.id < other.id) ? [it, other] : [other, it];
+        gone[drop.id] = Math.max(gone[drop.id] || 0, drop.u || 1);
+        byName.set(it.name, keep);
+      }
+      lists[L] = [...byName.values()].sort((x, y) => x.id < y.id ? -1 : x.id > y.id);
+    }
+    const photos = {}, photoTimes = {...(b.photoTimes || {}), ...(a.photoTimes || {})};
+    for (const n of new Set([...Object.keys(a.photos || {}), ...Object.keys(b.photos || {}), ...Object.keys(photoTimes)])) {
+      const ta = (a.photoTimes || {})[n] || 0, tb = (b.photoTimes || {})[n] || 0;
+      photoTimes[n] = Math.max(ta, tb);
+      const src = ta >= tb ? (a.photos || {})[n] : (b.photos || {})[n];
+      if (src) photos[n] = src;
+    }
+    return {v: 1, lists, gone, history: {...(b.history || {}), ...a.history}, photos, photoTimes};
+  }
+
+  function applyDoc(d) {
+    state.lists = d.lists; state.gone = d.gone; state.history = d.history;
+    myPhotos = d.photos; photoTimes = d.photoTimes; savedPhotos = {...myPhotos};
+    rememberSaved();
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      localStorage.setItem(PHOTO_KEY, JSON.stringify(myPhotos));
+      localStorage.setItem(PHOTO_TIME_KEY, JSON.stringify(photoTimes));
+    } catch {}
+  }
+
+  // השוואה בלי תלות בסדר המפתחות (השרת שומר JSON בסדר משלו)
+  const stable = v => Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
+    : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}'
+    : JSON.stringify(v);
+
+  let syncTimer, syncing = false, syncAgain = false, lastSync = 0;
+  function scheduleSync() {
+    if (!syncCode) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(sync, 800);
+  }
+  function syncState(cls, text) {
+    $('syncBtn').className = 'syncbtn ' + cls;
+    if (text !== undefined) $('syncStatus').textContent = text;
+  }
+  async function sync() {
+    if (!syncCode) return syncState('');
+    if (syncing) { syncAgain = true; return; }
+    syncing = true;
+    try {
+      const remote = await rpc('shopping_get', {p_code: syncCode});
+      const before = stable(localDoc());
+      const merged = mergeDocs(localDoc(), remote);
+      const after = stable(merged);
+      if (after !== before) { applyDoc(merged); fillHistory(); render(); }
+      if (after !== stable(remote)) await rpc('shopping_put', {p_code: syncCode, p_data: merged});
+      lastSync = Date.now();
+      syncState('on', 'סונכרן ב־' + new Date().toLocaleTimeString('he-IL', {hour: '2-digit', minute: '2-digit'}));
+    } catch {
+      syncState('err', navigator.onLine === false ? 'אין חיבור לאינטרנט. הסנכרון ימשיך כשהחיבור יחזור' : 'הסנכרון נכשל, ננסה שוב בעוד רגע');
+    }
+    syncing = false;
+    if (syncAgain) { syncAgain = false; sync(); }
+  }
+  function setCode(c) {
+    syncCode = c;
+    try { c ? localStorage.setItem(SYNC_KEY, c) : localStorage.removeItem(SYNC_KEY); } catch {}
+    openSync();
+  }
+  function openSync() {
+    $('syncOff').hidden = !!syncCode;
+    $('syncOn').hidden = !syncCode;
+    if (syncCode) $('syncShow').textContent = showCode(syncCode);
+    if (!$('syncDlg').open) $('syncDlg').showModal();
+  }
+  $('syncBtn').onclick = () => { $('syncStatus').textContent = syncCode && lastSync ? $('syncStatus').textContent : ''; openSync(); };
+  $('syncClose').onclick = () => $('syncDlg').close();
+  $('syncNow').onclick = () => { $('syncStatus').textContent = 'מסנכרן...'; sync(); };
+  $('syncNew').onclick = async () => {
+    const c = newCode();
+    $('syncStatus').textContent = 'יוצר קוד...';
+    try {
+      await rpc('shopping_put', {p_code: c, p_data: localDoc()});
+      setCode(c); lastSync = Date.now();
+      syncState('on', 'מוכן. עכשיו מקלידים את הקוד במכשיר השני');
+    } catch { $('syncStatus').textContent = 'לא הצלחתי ליצור קוד. בודקים שיש אינטרנט ומנסים שוב'; }
+  };
+  $('syncJoin').onsubmit = async e => {
+    e.preventDefault();
+    const c = cleanCode($('syncCode').value);
+    if (c.length !== 12) return void ($('syncStatus').textContent = 'הקוד צריך להיות 12 אותיות ומספרים');
+    $('syncStatus').textContent = 'מתחבר...';
+    try {
+      if (!await rpc('shopping_get', {p_code: c})) return void ($('syncStatus').textContent = 'לא מצאתי רשימה עם הקוד הזה');
+      setCode(c); await sync();
+      $('syncStatus').textContent = 'מחובר! הרשימות אוחדו';
+    } catch { $('syncStatus').textContent = 'לא הצלחתי להתחבר. בודקים שיש אינטרנט ומנסים שוב'; }
+  };
+  $('syncOut').onclick = () => {
+    if (!confirm('לנתק את המכשיר הזה? הרשימה תישאר כאן, אבל שינויים לא יעברו יותר למכשירים האחרים.')) return;
+    setCode(''); syncState('', 'המכשיר נותק');
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+  window.addEventListener('online', sync);
+  setInterval(() => { if (!document.hidden) sync(); }, 20000);
+
+  function fillHistory() {
+    $('history').innerHTML = '';
+    for (const name of Object.keys(state.history).slice(-200)) {
+      const o = document.createElement('option'); o.value = name; $('history').append(o);
+    }
+  }
+
+  $('cat').innerHTML = CATS.map(([id, icon, label]) => `<option value="${id}">${icon} ${label}</option>`).join('');
+  $('cat').onchange = () => { $('cat').dataset.manual = '1'; updateCatPicker(); };
+  $('text').oninput = updateCatPicker;
+  $('add').onsubmit = add;
+
+  load(); fillHistory(); updateCatPicker(); render();
+  const urlCode = cleanCode(new URLSearchParams(location.search).get('sync') || '');
+  if (urlCode.length === 12 && urlCode !== syncCode) { syncCode = urlCode; try { localStorage.setItem(SYNC_KEY, urlCode); } catch {} }
+  sync();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  </script>
+</body>
+</html>
