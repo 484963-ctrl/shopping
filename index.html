@@ -122,7 +122,7 @@
     .find input{flex:1;min-width:0;border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:10px;outline:none}
     .find input:focus{border-color:var(--accent)}
     .find button{flex:none;padding:10px 14px}
-    .status{font-size:.85em;color:var(--muted);margin-top:8px;min-height:1.2em}
+    .status{font-size:.85em;color:var(--muted);margin-top:8px;min-height:1.2em;white-space:pre-line}
     .results{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
     .results button{display:flex;flex-direction:column;gap:4px;padding:4px;border:2px solid var(--line);border-radius:12px;background:var(--surface);font-weight:400;font-size:.72em;line-height:1.2;text-align:center;color:var(--ink)}
     .results img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:8px}
@@ -287,7 +287,7 @@
   }
 
   // תמונות שנמצאו לבד בחיפוש (לפי שם הפריט). {src, t}: src ריק = לא נמצא, מנסים שוב אחרי יום
-  const AUTO_KEY = 'shopping-auto-photos-v1';
+  const AUTO_KEY = 'shopping-auto-photos-v2';
   let autoPhotos = {};
   try { autoPhotos = JSON.parse(localStorage.getItem(AUTO_KEY)) || {}; } catch {}
 
@@ -310,16 +310,19 @@
     const other = state.current === 'shabbat' ? 'general' : 'shabbat';
     const all = [...items(), ...state.lists[other]];   // קודם הרשימה שעל המסך
     const need = all.find(it => !myPhotos[it.name] && !keepBuiltin(it)
-      && !(autoPhotos[it.name] && (autoPhotos[it.name].src || Date.now() - autoPhotos[it.name].t < 864e5)));
+      && !(autoPhotos[it.name] && (autoPhotos[it.name].src || Date.now() - autoPhotos[it.name].t < 864e5)));   // לא נמצא: מנסים שוב אחרי יום
     if (!need) return;
     autoBusy = true;
-    let src = '';
-    for (const find of [findProducts, findWiki]) {
-      try { src = (await find(need.name))[0]?.src || ''; } catch {}
+    let src = '', answered = false;
+    for (const [, find] of SOURCES) {
+      try { src = (await find(need.name))[0]?.src || ''; answered = true; } catch {}
       if (src) break;
     }
-    autoPhotos[need.name] = {src, t: Date.now()};
-    try { localStorage.setItem(AUTO_KEY, JSON.stringify(autoPhotos)); } catch {}
+    // אף מקור לא ענה (בעיית רשת): לא רושמים כלום, וננסה שוב בפתיחה הבאה
+    if (answered || src) {
+      autoPhotos[need.name] = {src, t: Date.now()};
+      try { localStorage.setItem(AUTO_KEY, JSON.stringify(autoPhotos)); } catch {}
+    } else autoPhotos[need.name] = {src: '', t: Date.now() - 864e5 + 10 * 60e3};   // בזיכרון בלבד: עוד 10 דקות
     if (src) render();
     // מרווח קטן בין חיפושים, כדי לא להעמיס על המאגר
     setTimeout(() => { autoBusy = false; fillAutoPhotos(); }, 1200);
@@ -550,23 +553,48 @@
   const OFF = 'https://world.openfoodfacts.org';
   const offItem = p => p.image_front_small_url && {src: p.image_front_small_url, label: [p.product_name_he || p.product_name, p.brands].filter(Boolean).join(' · ')};
   async function getJson(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000);
+    try {
+      const r = await fetch(url, {signal: ctl.signal});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } finally { clearTimeout(timer); }
   }
   async function findByBarcode(code) {
     const d = await getJson(`${OFF}/api/v2/product/${code}.json?fields=product_name,product_name_he,brands,image_front_small_url`);
     return d.product ? [offItem(d.product)].filter(Boolean) : [];
   }
+  const OFF_FIELDS = 'product_name,product_name_he,brands,image_front_small_url';
   async function findProducts(q) {
-    const d = await getJson(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&json=1&page_size=12&fields=product_name,product_name_he,brands,image_front_small_url`);
+    // מנוע החיפוש החדש של Open Food Facts, ואם הוא לא מחזיר כלום – החיפוש הישן
+    let found = [];
+    try {
+      const d = await getJson(`https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=12&fields=${OFF_FIELDS}`);
+      found = (d.hits || d.products || []).map(offItem).filter(Boolean);
+    } catch {}
+    if (found.length) return found;
+    const d = await getJson(`${OFF}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=12&fields=${OFF_FIELDS}`);
     return (d.products || []).map(offItem).filter(Boolean);
+  }
+  // ויקינתונים: לפי השם בעברית, התמונה הראשית של הערך (למשל בקבוק קוקה קולה)
+  async function findWikidata(q) {
+    const W = 'https://www.wikidata.org/w/api.php?format=json&origin=*';
+    const s = await getJson(`${W}&action=wbsearchentities&language=he&uselang=he&limit=6&search=${encodeURIComponent(q)}`);
+    const ids = (s.search || []).map(e => e.id);
+    if (!ids.length) return [];
+    const d = await getJson(`${W}&action=wbgetentities&props=claims|labels&languages=he&ids=${ids.join('|')}`);
+    return ids.map(id => d.entities?.[id]).filter(e => e?.claims?.P18).map(e => ({
+      src: 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(e.claims.P18[0].mainsnak.datavalue.value) + '?width=300',
+      label: e.labels?.he?.value || q,
+    }));
   }
   async function findWiki(q) {
     const d = await getJson(`https://he.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=6&gsrsearch=${encodeURIComponent(q)}&prop=pageimages&piprop=thumbnail&pithumbsize=300`);
     return Object.values(d.query?.pages || {}).sort((a, b) => a.index - b.index)
       .filter(p => p.thumbnail).map(p => ({src: p.thumbnail.source, label: p.title}));
   }
+
+  const SOURCES = [['Open Food Facts', findProducts], ['ויקינתונים', findWikidata], ['ויקיפדיה', findWiki]];
 
   let searchId = 0;
   async function search(q) {
@@ -575,14 +603,17 @@
     const id = ++searchId, digits = q.replace(/\s/g, '');
     $('results').innerHTML = '';
     $('findStatus').textContent = 'מחפש...';
-    const tasks = /^\d{8,14}$/.test(digits) ? [findByBarcode(digits)] : [findProducts(q), findWiki(q)];
-    const found = (await Promise.allSettled(tasks)).flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    const sources = /^\d{8,14}$/.test(digits) ? [['ברקוד', findByBarcode]] : SOURCES;
+    const results = await Promise.allSettled(sources.map(([, find]) => find(/^\d{8,14}$/.test(digits) ? digits : q)));
     if (id !== searchId) return;
+    const found = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    // שורת מצב לכל מקור: כמה נמצא, או מה השגיאה (עוזר להבין מה לא עובד)
+    const report = sources.map(([name], i) => name + ': ' + (results[i].status === 'fulfilled' ? results[i].value.length : 'שגיאה (' + (results[i].reason?.name === 'AbortError' ? 'לא ענה' : results[i].reason?.message || 'רשת') + ')')).join(' · ');
     if (!found.length) {
-      $('findStatus').textContent = navigator.onLine === false ? 'אין חיבור לאינטרנט' : 'לא נמצאו תמונות. אפשר לנסות שם אחר, לסרוק ברקוד או לצלם';
+      $('findStatus').textContent = (navigator.onLine === false ? 'אין חיבור לאינטרנט' : 'לא נמצאו תמונות. אפשר לנסות שם אחר, לסרוק ברקוד או לצלם') + '\n' + report;
       return;
     }
-    $('findStatus').textContent = 'בוחרים את התמונה המתאימה:';
+    $('findStatus').textContent = 'בוחרים את התמונה המתאימה:\n' + report;
     for (const f of found.slice(0, 15)) {
       const b = document.createElement('button');
       b.type = 'button';
